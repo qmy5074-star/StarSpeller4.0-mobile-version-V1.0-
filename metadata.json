@@ -1,6 +1,6 @@
 {
   "name": "Remix: Star Speller V4.0",
-  "description": "优化移动端UI和交互体验",
+  "description": "专为儿童设计的 AI 驱动拼写学习应用，结合 Gemini AI 提供多维学习路径与趣味交互体验。",
   "requestFramePermissions": [
     "microphone"
   ]
