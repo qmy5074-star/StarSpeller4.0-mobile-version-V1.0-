@@ -67,6 +67,36 @@
       .animate-scale-in {
         animation: scaleIn 0.3s ease-out forwards;
       }
+
+      @keyframes rhythmRing {
+        from {
+          transform: scale(1.5);
+          opacity: 0;
+        }
+        to {
+          transform: scale(0.8);
+          opacity: 1;
+        }
+      }
+      .animate-rhythm-ring {
+        animation: rhythmRing linear forwards;
+      }
+
+      @keyframes bounceShort {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-10px); }
+      }
+      .animate-bounce-short {
+        animation: bounceShort 0.5s ease-in-out;
+      }
+
+      @keyframes pulseBeat {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+      }
+      .animate-pulse-beat {
+        animation: pulseBeat 0.5s ease-in-out infinite;
+      }
     </style>
   <script type="importmap">
 {

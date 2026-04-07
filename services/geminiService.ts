@@ -67,14 +67,23 @@ export const validateWordInput = async (word: string): Promise<WordValidationRes
       model,
       contents: `Validate the word: "${word}"`,
       config: {
-        systemInstruction: `Validate the following English word input.
-        Rules for valid words:
-        1. Must be a real English word.
-        2. Must have actual meaning and be suitable for learning as thematic vocabulary.
-        3. Allowed parts of speech: Nouns, Verbs, Adjectives.
-        4. Disallowed parts of speech: Adverbs (e.g., quickly, very), Interjections (e.g., wow, oh), Pronouns (e.g., he, she), Prepositions (e.g., in, on), Conjunctions (e.g., and, but), Articles (e.g., a, the), Particles.
-        5. If the user input has minor typos but clearly means a valid word, provide the corrected word.
-        7. If the word is "dolphin", it is a valid noun.`,
+        systemInstruction: `You are a strict English vocabulary validator for a children's learning app.
+        Validate the following English word input: "${word}".
+        
+        CRITICAL RULES:
+        1. **Existence**: Must be a real, correctly spelled English word (or a very minor typo that can be corrected).
+        2. **Allowed POS**: ONLY Nouns (n.), Verbs (v.), and Adjectives (adj.).
+        3. **Disallowed POS**: 
+           - Adverbs (e.g., "quickly", "very")
+           - Pronouns (e.g., "he", "she", "it")
+           - Prepositions (e.g., "in", "on", "at")
+           - Conjunctions (e.g., "and", "but", "or")
+           - Articles (e.g., "a", "an", "the")
+           - Interjections (e.g., "wow", "oh")
+           - Particles
+        4. **Suitability**: The word must be concrete enough to be illustrated for a 6-12 year old child. Avoid highly abstract or inappropriate concepts.
+        5. **Typos**: If the input has a minor typo (e.g., "appple"), set isValid to true and provide the correctedWord ("apple").
+        6. **Output**: Return a JSON object with isValid (boolean), reason (string, explain why if invalid), and correctedWord (string, optional).`,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -113,33 +122,25 @@ export const generateWordData = async (word: string): Promise<WordData> => {
         
         1. "parts": Break the word into **Spelling Chunks** using a **Right-to-Left** analysis strategy.
            - **Rule 1 (Right-to-Left, Vowel+Consonant)**: Scan from right to left. Group one vowel sound with its leading consonant(s).
-           - **Rule 2 (Silent E)**: 'e' at the end of a word is silent and does NOT count as a vowel. It belongs to the preceding group.
-           - **Rule 3 (Vowel Teams)**: Vowel digraphs (e.g., 'ai', 'ea', 'oa', 'ou', 'ir', 'er', 'ur') count as ONE vowel sound.
-           - **Rule 4 (Ends)**: Keep suffixes intact where possible (e.g., 'ment', 'tion', 'ing').
-           - **Rule 5 (Single Vowel Sound)**: If a word has only one vowel sound (like 'cake', 'bird', 'shirt', 'make', 'bike'), do NOT split it. It is a single chunk.
-           - **Specific Override**: For "bird", use ["bird"].
-           - **Specific Override**: For "shirt", use ["shirt"].
-           - **Specific Override**: For "favourite", use ["fa", "vou", "rite"].
-           - **Specific Override**: For "favorite", use ["fa", "vo", "rite"].
-           - **Specific Override**: For "cake", use ["cake"].
-           - **Specific Override**: For "education", use ["e", "du", "ca", "tion"].
-           - **Specific Override**: For "helicopter", use ["he", "li", "cop", "ter"].
-           - **Specific Override**: For "argument", use ["ar", "gu", "ment"].
-           - **Specific Override**: For "bucket", use ["bu", "cket"].
-           - **Specific Override**: For "slime", use ["s", "lime"].
-           - **Specific Override**: For "bait", use ["bait"].
-           - **Specific Override**: For "kitchen", use ["kit", "chen"].
-           - **Specific Override**: For "complementary", use ["com", "ple", "men", "ta", "ry"].
-           - **Specific Override**: For "kangaroo", use ["kan", "ga", "roo"].
-           - **Specific Override**: For "penguin", use ["pen", "guin"].
-           - **Specific Override**: For "purple", use ["pur", "ple"].
-           - **Specific Override**: For "turtle", use ["tur", "tle"].
-           - **Specific Override**: For "orange", use ["or", "ange"].
-           - **Specific Override**: For "yellow", use ["yel", "low"].
-           - **Specific Override**: For "dolphin", use ["dol", "phin"].
-           - **Specific Override**: For "frightened", use ["fright", "ened"].
-           - **Specific Override**: For "thirsty", use ["thirs", "ty"].
-           - **Specific Override**: For "family", use ["fam", "i", "ly"].
+           - **Rule 2 (Silent E)**: 'e' at the end of a word is silent and does NOT count as a vowel. It belongs to the preceding group (e.g., 'cake' -> ['cake'], 'slime' -> ['s', 'lime']).
+           - **Rule 3 (Vowel Teams)**: Vowel digraphs (e.g., 'ai', 'ea', 'oa', 'ou', 'ir', 'er', 'ur', 'oo') count as ONE vowel sound.
+           - **Rule 4 (Y as Vowel)**: 'y' at the end of a word or syllable acts as a vowel (e.g., 'happy' -> ['hap', 'py'], 'sky' -> ['sky']).
+           - **Rule 5 (Double Consonants)**: Split between double consonants (e.g., 'apple' -> ['ap', 'ple'], 'rabbit' -> ['rab', 'bit']).
+           - **Rule 6 (Compound Words)**: Split between the two base words first (e.g., 'football' -> ['foot', 'ball'], 'sunflower' -> ['sun', 'flow', 'er']).
+           - **Rule 7 (Suffixes)**: Keep common suffixes intact (e.g., 'ment', 'tion', 'ing', 'ness').
+           - **Rule 8 (Single Vowel Sound)**: If a word has only one vowel sound, do NOT split it.
+           - **Examples**: 
+             - "bird" -> ["bird"]
+             - "shirt" -> ["shirt"]
+             - "cake" -> ["cake"]
+             - "slime" -> ["s", "lime"]
+             - "apple" -> ["ap", "ple"]
+             - "tiger" -> ["ti", "ger"]
+             - "education" -> ["e", "du", "ca", "tion"]
+             - "helicopter" -> ["he", "li", "cop", "ter"]
+             - "kangaroo" -> ["kan", "ga", "roo"]
+             - "dolphin" -> ["dol", "phin"]
+             - "family" -> ["fam", "i", "ly"]
            - **Goal**: Every part should be a pronounceable chunk, ideally following "One Vowel One Consonant" flow where the consonant leads the next vowel.
         2. "partsPronunciation": An array of simple English strings mirroring "parts" to help a TTS engine pronounce the syllable correctly in isolation.
            - **Crucial**: The goal is standard American pronunciation.
@@ -221,15 +222,45 @@ export const generateWordImage = async (word: string): Promise<string> => {
   }
   const ai = new GoogleGenAI({ apiKey });
   try {
-    // Explicitly using gemini-2.5-flash-image for image generation
+    // Step 1: Generate a descriptive prompt using gemini-3-flash-preview
+    const descriptivePrompt = await withRetry(async () => {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `Generate a descriptive image prompt for the word: "${word}"`,
+        config: {
+          systemInstruction: `You are an expert at writing prompts for image generation models.
+          Your goal is to create a prompt for a children's learning app illustration.
+          
+          STYLE GUIDELINES:
+          - Core Style: Cute cartoon style illustration, vibrant colors, thick lines, child-friendly, vector illustration, soft lighting.
+          - Composition: Centered subject, simple white background, single object, high contrast.
+          - Constraints: NO TEXT, NO COMPLEX SCENES, NO BACKGROUND DISTRACTIONS.
+          
+          TASK:
+          Describe the word "${word}" in a way that is easy for a child to recognize. 
+          For example, if the word is "apple", describe a shiny red apple with a small green leaf.
+          If the word is "run", describe a cute puppy running happily.
+          
+          OUTPUT:
+          Return ONLY the descriptive prompt string. Do not include any other text.`,
+          maxOutputTokens: 500,
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
+        }
+      });
+      return response.text?.trim() || `A cute cartoon illustration of ${word}`;
+    });
+
+    console.log("Generated Image Prompt for", word, ":", descriptivePrompt);
+
+    // Step 2: Generate the image using gemini-2.5-flash-image
     const model = 'gemini-2.5-flash-image';
-    const prompt = `A cute, colorful, cartoon-style illustration for children representing the word: "${word}". Simple background, vector art style.`;
+    const finalPrompt = `${descriptivePrompt}. Cute cartoon style, vibrant colors, thick lines, child-friendly, vector illustration, soft lighting, centered subject, simple white background, no text, single object, high contrast.`;
     
     // Attempt generation with retry
     const rawImage = await withRetry(async () => {
       const response = await ai.models.generateContent({
         model,
-        contents: { parts: [{ text: prompt }] },
+        contents: { parts: [{ text: finalPrompt }] },
         config: {
           maxOutputTokens: 2048
         }

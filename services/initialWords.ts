@@ -3,6 +3,7 @@ import { WordData } from "../types";
 export const INITIAL_WORDS: WordData[] = [
   {
     word: "apple",
+    partOfSpeech: "n.",
     parts: ["ap", "ple"],
     partsPronunciation: ["ap", "pull"],
     root: "Old English 'æppel'",
@@ -15,6 +16,7 @@ export const INITIAL_WORDS: WordData[] = [
   },
   {
     word: "happy",
+    partOfSpeech: "adj.",
     parts: ["hap", "py"],
     partsPronunciation: ["hap", "pee"],
     root: "hap (luck) + y",
@@ -27,6 +29,7 @@ export const INITIAL_WORDS: WordData[] = [
   },
   {
     word: "tiger",
+    partOfSpeech: "n.",
     parts: ["ti", "ger"],
     partsPronunciation: ["tie", "grr"],
     root: "Greek 'tigris'",
@@ -39,6 +42,7 @@ export const INITIAL_WORDS: WordData[] = [
   },
   {
     word: "dolphin",
+    partOfSpeech: "n.",
     parts: ["dol", "phin"],
     partsPronunciation: ["dol", "fin"],
     root: "dol (like doll) + phin (sounds like fin)",
@@ -51,6 +55,7 @@ export const INITIAL_WORDS: WordData[] = [
   },
   {
     word: "frightened",
+    partOfSpeech: "adj.",
     parts: ["fright", "ened"],
     partsPronunciation: ["frite", "und"],
     root: "fright (like light) + ened (sounds like und)",

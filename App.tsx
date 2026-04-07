@@ -252,6 +252,8 @@ export default function App() {
   const [rhythmWordIndex, setRhythmWordIndex] = useState(0);
   const [rhythmPartIndex, setRhythmPartIndex] = useState(0);
   const [rhythmCombo, setRhythmCombo] = useState(0);
+  const [rhythmHitFeedback, setRhythmHitFeedback] = useState<'PERFECT' | 'GOOD' | 'MISS' | null>(null);
+  const [rhythmRoundStartTime, setRhythmRoundStartTime] = useState(0);
   const [rhythmQueue, setRhythmQueue] = useState<WordData[]>([]);
   const [rhythmFallingOptions, setRhythmFallingOptions] = useState<string[]>([]);
   const [rhythmShake, setRhythmShake] = useState(false);
@@ -773,7 +775,13 @@ export default function App() {
 
   // --- SHARED VOICE HELPERS ---
 
+  const voiceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   const handleVoiceStop = () => {
+    if (voiceTimeoutRef.current) {
+      clearTimeout(voiceTimeoutRef.current);
+      voiceTimeoutRef.current = null;
+    }
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
@@ -786,7 +794,7 @@ export default function App() {
 
   const handleInputStart = () => {
     if (!('webkitSpeechRecognition' in window)) {
-      alert("Speech recognition not supported on this browser. Please use Chrome on desktop.");
+      setAlertMessage("Speech recognition not supported on this browser. Please use Chrome on desktop.");
       return;
     }
     if (navigator.vibrate) navigator.vibrate(50);
@@ -797,8 +805,20 @@ export default function App() {
     recognition.interimResults = true; 
     recognition.continuous = true; 
     
-    recognition.onstart = () => setIsListening(true);
+    recognition.onstart = () => {
+      setIsListening(true);
+      voiceTimeoutRef.current = setTimeout(() => {
+        if (isListening && !inputTranscript) {
+          handleVoiceStop();
+          setAlertMessage("I didn't hear anything. Try again! 👂");
+        }
+      }, 5000);
+    };
     recognition.onresult = (event: any) => {
+      if (voiceTimeoutRef.current) {
+        clearTimeout(voiceTimeoutRef.current);
+        voiceTimeoutRef.current = null;
+      }
       const results = event.results;
       const transcript = results[results.length - 1][0].transcript;
       setInputTranscript(transcript);
@@ -809,11 +829,11 @@ export default function App() {
         }
         setIsListening(false);
         if (event.error === 'not-allowed') {
-            alert("Microphone access denied. Please allow microphone permissions.");
+            setAlertMessage("Microphone access denied. Please allow microphone permissions.");
         } else if (event.error === 'no-speech' || event.error === 'aborted') {
             // Ignore no-speech and aborted errors
         } else {
-            alert("Voice input error: " + event.error);
+            setAlertMessage("Voice input error: " + event.error);
         }
     };
     recognition.onend = () => setIsListening(false);
@@ -1054,8 +1074,20 @@ export default function App() {
       recognition.continuous = true;
       recognition.interimResults = true;
 
-      recognition.onstart = () => setIsListening(true);
+      recognition.onstart = () => {
+        setIsListening(true);
+        voiceTimeoutRef.current = setTimeout(() => {
+          if (isListening && !shadowingTranscript) {
+            handleVoiceStop();
+            setAlertMessage("I didn't hear anything. Try again! 👂");
+          }
+        }, 5000);
+      };
       recognition.onresult = (event: any) => {
+        if (voiceTimeoutRef.current) {
+          clearTimeout(voiceTimeoutRef.current);
+          voiceTimeoutRef.current = null;
+        }
         const results = event.results;
         const transcript = results[results.length - 1][0].transcript.toLowerCase();
         setShadowingTranscript(transcript);
@@ -1119,8 +1151,20 @@ export default function App() {
     recognition.lang = 'en-US';
     recognition.continuous = false; 
     recognition.interimResults = false;
-    recognition.onstart = () => setIsListening(true);
+    recognition.onstart = () => {
+      setIsListening(true);
+      voiceTimeoutRef.current = setTimeout(() => {
+        if (isListening) {
+          handleVoiceStop();
+          setAlertMessage("I didn't hear anything. Try again! 👂");
+        }
+      }, 5000);
+    };
     recognition.onresult = (event: any) => {
+      if (voiceTimeoutRef.current) {
+        clearTimeout(voiceTimeoutRef.current);
+        voiceTimeoutRef.current = null;
+      }
       const transcript = event.results[0][0].transcript.toLowerCase();
       
       // Clean up the transcript: remove spaces, punctuation, etc. to just get the letters
@@ -1492,6 +1536,8 @@ export default function App() {
       const distractors = generateDistractors(target);
       const options = shuffleArray([target, ...distractors]);
       setRhythmFallingOptions(options);
+      setRhythmRoundStartTime(Date.now());
+      setRhythmHitFeedback(null);
 
       if (pIndex < currentWordData.parts.length) {
          const pronounce = getPartPronunciation(currentWordData, pIndex);
@@ -1515,6 +1561,26 @@ export default function App() {
       const target = currentWordData.parts[rhythmPartIndex];
 
       if (selectedPart === target) {
+          // Calculate timing feedback
+          const now = Date.now();
+          const elapsed = now - rhythmRoundStartTime;
+          const bpm = currentBPMRef.current;
+          const msPerBeat = 60000 / bpm;
+          
+          // Target hit is at 4 beats (graceBeats in prepareRhythmRound)
+          // But we want to judge based on the closest beat.
+          // Let's assume the user should hit on the 4th beat.
+          const targetTime = msPerBeat * 4;
+          const diff = Math.abs(elapsed - targetTime);
+          
+          if (diff < 100) {
+              setRhythmHitFeedback('PERFECT');
+          } else if (diff < 250) {
+              setRhythmHitFeedback('GOOD');
+          } else {
+              setRhythmHitFeedback(null);
+          }
+
           playHarmony(rhythmCombo); 
           setRhythmCombo(prev => prev + 1);
           const nextPartIndex = rhythmPartIndex + 1;
@@ -2315,6 +2381,7 @@ export default function App() {
       if (rhythmQueue.length === 0) return null;
       const currentWord = rhythmQueue[rhythmWordIndex];
       const isWordComplete = rhythmPhase === 'WORD_COMPLETE';
+      
       if (rhythmPhase === 'WAITING') {
           return (
               <div className="flex flex-col items-center justify-center min-h-[60vh] gap-8 p-6 bg-slate-900 rounded-[3rem] shadow-2xl border-4 border-slate-800 animate-fade-in text-white relative overflow-hidden">
@@ -2327,30 +2394,119 @@ export default function App() {
               </div>
           );
       }
+
+      const progress = ((rhythmWordIndex) / rhythmQueue.length) * 100;
+      const bpm = currentBPMRef.current;
+      const msPerBeat = 60000 / bpm;
+      const animationDuration = `${(msPerBeat * 4) / 1000}s`;
+
       return (
-          <div className="flex flex-col items-center min-h-[70vh] w-full max-w-md mx-auto relative bg-slate-900 rounded-[2rem] overflow-hidden border-4 border-slate-800 shadow-2xl">
-              <div className="absolute top-0 w-full h-32 bg-gradient-to-b from-violet-900/50 to-transparent pointer-events-none"></div>
-              <div className="w-full flex justify-between items-center p-4 z-10 text-white">
-                  <div className="font-black text-slate-500 uppercase tracking-widest text-sm">Word {rhythmWordIndex + 1}/{rhythmQueue.length}</div>
-                  <div className={`font-black text-2xl ${rhythmCombo > 1 ? 'text-yellow-400 animate-bounce' : 'text-slate-600'}`}>{rhythmCombo > 0 ? `${rhythmCombo} COMBO` : 'GROOVE'}</div>
+          <div className={`flex flex-col items-center min-h-[70vh] w-full max-w-md mx-auto relative bg-slate-900 rounded-[2rem] overflow-hidden border-4 border-slate-800 shadow-2xl transition-all ${rhythmShake ? 'animate-shake border-red-500' : ''}`}>
+              {/* Progress Bar */}
+              <div className="absolute top-0 left-0 w-full h-1.5 bg-slate-800 z-20">
+                  <div 
+                    className="h-full bg-gradient-to-r from-pink-500 via-violet-500 to-cyan-500 transition-all duration-500" 
+                    style={{ width: `${progress}%` }}
+                  ></div>
               </div>
-              <div className={`flex-1 w-full flex flex-col justify-center items-center gap-8 p-4 z-10 ${rhythmShake ? 'animate-shake' : ''}`}>
-                  <div className="text-center w-full">
-                       {isWordComplete && <p className="text-green-400 font-bold mb-2 animate-bounce">Perfect!</p>}
-                       <div className={`text-4xl font-black tracking-widest uppercase break-words px-4 flex flex-wrap justify-center gap-1 ${isWordComplete ? 'scale-110 transition-transform duration-500' : ''}`}>{currentWord.parts.map((part, index) => { let colorClass = "text-slate-600"; if (isWordComplete) colorClass = "text-green-400 drop-shadow-[0_0_10px_rgba(74,222,128,0.5)]"; else if (index < rhythmPartIndex) colorClass = "text-green-500"; else if (index === rhythmPartIndex) colorClass = "text-white scale-110"; return (<span key={index} className={`transition-all duration-300 ${colorClass}`}>{part}</span>); })}</div>
+
+              <div className="absolute top-0 w-full h-32 bg-gradient-to-b from-violet-900/30 to-transparent pointer-events-none"></div>
+              
+              <div className="w-full flex justify-between items-center p-6 z-10 text-white">
+                  <div className="flex flex-col">
+                    <div className="font-black text-slate-500 uppercase tracking-widest text-[10px]">Word {rhythmWordIndex + 1}/{rhythmQueue.length}</div>
+                    <div className="text-xs font-bold text-violet-400">{bpm} BPM</div>
                   </div>
-                  <div className={`w-24 h-24 rounded-full bg-slate-800 border-4 border-violet-500 flex items-center justify-center shadow-[0_0_30px_rgba(139,92,246,0.4)] transition-all ${isWordComplete ? 'scale-125 bg-green-900 border-green-500' : 'animate-pulse'}`}><span className="text-4xl">{isWordComplete ? '✅' : '🔊'}</span></div>
-                  <div className="w-full flex-1 min-h-[16rem] relative flex flex-col justify-end">
+                  
+                  <div className="relative">
+                    <div className={`font-black text-3xl transition-all duration-300 ${
+                        rhythmCombo > 30 ? 'text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-yellow-400 to-cyan-400 animate-pulse scale-125' :
+                        rhythmCombo > 10 ? 'text-yellow-400 scale-110 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]' :
+                        rhythmCombo > 0 ? 'text-white' : 'text-slate-700'
+                    }`}>
+                        {rhythmCombo > 0 ? `${rhythmCombo}` : '0'}
+                    </div>
+                    <div className="text-[8px] font-black text-slate-500 uppercase tracking-widest text-center">Combo</div>
+                  </div>
+              </div>
+
+              <div className="flex-1 w-full flex flex-col justify-center items-center gap-10 p-4 z-10">
+                  {/* Feedback Popup */}
+                  <div className="h-8 flex items-center justify-center">
+                    {rhythmHitFeedback && (
+                        <div className={`font-black text-2xl animate-bounce-short ${
+                            rhythmHitFeedback === 'PERFECT' ? 'text-yellow-400' :
+                            rhythmHitFeedback === 'GOOD' ? 'text-cyan-400' : 'text-red-500'
+                        }`}>
+                            {rhythmHitFeedback}!
+                        </div>
+                    )}
+                  </div>
+
+                  <div className="text-center w-full">
+                       <div className={`text-4xl md:text-5xl font-black tracking-widest uppercase break-words px-4 flex flex-wrap justify-center gap-2 ${isWordComplete ? 'scale-110 transition-transform duration-500' : ''}`}>
+                           {currentWord.parts.map((part, index) => { 
+                               let colorClass = "text-slate-700"; 
+                               if (isWordComplete) colorClass = "text-green-400 drop-shadow-[0_0_15px_rgba(74,222,128,0.6)]"; 
+                               else if (index < rhythmPartIndex) colorClass = "text-green-500"; 
+                               else if (index === rhythmPartIndex) colorClass = "text-white scale-110 drop-shadow-[0_0_10px_rgba(255,255,255,0.3)] animate-pulse-beat"; 
+                               return (<span key={index} className={`transition-all duration-300 ${colorClass}`}>{part}</span>); 
+                           })}
+                       </div>
+                  </div>
+
+                  {/* Rhythm Target with Shrinking Ring */}
+                  <div className="relative flex items-center justify-center">
+                      {!isWordComplete && (
+                          <div 
+                            key={`${rhythmWordIndex}-${rhythmPartIndex}`}
+                            className="absolute w-32 h-32 rounded-full border-4 border-violet-500/30 animate-rhythm-ring"
+                            style={{ animationDuration }}
+                          ></div>
+                      )}
+                      <div className={`w-24 h-24 rounded-full bg-slate-800 border-4 flex items-center justify-center shadow-2xl transition-all duration-300 ${
+                          isWordComplete ? 'scale-125 bg-green-900 border-green-500 shadow-green-500/40' : 
+                          'border-violet-500 shadow-violet-500/20 animate-pulse'
+                      }`}>
+                          <span className="text-4xl">{isWordComplete ? '✅' : '🔊'}</span>
+                      </div>
+                  </div>
+
+                  <div className="w-full flex-1 min-h-[12rem] relative flex flex-col justify-end pb-8">
                     {isWordComplete ? (
                         <div className="absolute inset-0 flex items-center justify-center animate-fade-in-up z-20">
-                            <div className="bg-slate-900/90 backdrop-blur-xl px-10 py-8 rounded-3xl border-2 border-slate-600/50 text-center shadow-[0_0_50px_rgba(0,0,0,0.6)] transform scale-105">
-                                {rhythmWordIndex + 1 < rhythmQueue.length ? (<><p className="text-violet-400 font-bold uppercase text-xs tracking-widest mb-3">Up Next</p><div className="text-5xl font-black text-white mb-6 tracking-tight drop-shadow-lg">{rhythmQueue[rhythmWordIndex + 1].word}</div><div className="flex items-center justify-center gap-2"><div className="w-2 h-2 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: '0ms' }}></div><div className="w-2 h-2 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: '150ms' }}></div><div className="w-2 h-2 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: '300ms' }}></div></div></>) : (<div className="text-3xl font-black text-green-400 animate-bounce">Set Finished!</div>)}
+                            <div className="bg-slate-900/90 backdrop-blur-xl px-10 py-8 rounded-3xl border-2 border-slate-700 text-center shadow-2xl transform scale-105">
+                                {rhythmWordIndex + 1 < rhythmQueue.length ? (
+                                    <>
+                                        <p className="text-violet-400 font-black uppercase text-[10px] tracking-widest mb-2">Up Next</p>
+                                        <div className="text-4xl font-black text-white mb-6 tracking-tight">{rhythmQueue[rhythmWordIndex + 1].word}</div>
+                                        <div className="flex items-center justify-center gap-2">
+                                            <div className="w-2 h-2 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                                            <div className="w-2 h-2 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                                            <div className="w-2 h-2 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="text-3xl font-black text-green-400 animate-bounce">Set Finished!</div>
+                                )}
                             </div>
                         </div>
-                    ) : (<div className="grid grid-cols-2 gap-4 w-full">{rhythmFallingOptions.map((opt, i) => (<button key={i + opt} onClick={() => handleRhythmHit(opt)} className="relative w-full py-4 rounded-xl font-black text-2xl bg-slate-800 text-white border-b-4 border-slate-950 hover:bg-slate-700 hover:border-violet-500 hover:text-violet-300 active:border-b-0 active:translate-y-2 transition-all duration-100 shadow-xl overflow-hidden animate-fade-in-up" style={{ animationDelay: `${i * 100}ms` }}>{opt}<div className="absolute top-0 left-0 w-full h-1/2 bg-white/5"></div></button>))}</div>)}
+                    ) : (
+                        <div className="grid grid-cols-2 gap-4 w-full px-4">
+                            {rhythmFallingOptions.map((opt, i) => (
+                                <button 
+                                    key={i + opt} 
+                                    onClick={() => handleRhythmHit(opt)} 
+                                    className="group relative w-full py-5 rounded-2xl font-black text-2xl bg-slate-800 text-white border-b-8 border-slate-950 hover:bg-slate-700 hover:border-violet-600 hover:scale-[1.02] active:border-b-0 active:translate-y-2 transition-all duration-100 shadow-xl overflow-hidden"
+                                >
+                                    <span className="relative z-10">{opt}</span>
+                                    <div className="absolute inset-0 bg-gradient-to-t from-violet-600/0 to-violet-600/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                </button>
+                            ))}
+                        </div>
+                    )}
                   </div>
               </div>
-              <div className="w-full h-4 bg-gradient-to-r from-pink-500 via-violet-500 to-cyan-500 animate-pulse"></div>
           </div>
       );
   };
@@ -2527,7 +2683,10 @@ export default function App() {
   const isDarkMode = step === GameStep.STEP_5_RHYTHM || (step === GameStep.FAIL && (isDailyChallenge || rhythmQueue.length > 0));
 
   return (
-    <div className={`min-h-screen font-sans selection:bg-blue-200 pb-28 transition-colors duration-500 ${isDarkMode ? 'bg-slate-950' : 'bg-[#F0F4F8]'}`}>
+    <div className={`min-h-screen font-sans selection:bg-blue-200 pb-28 transition-all duration-500 ${isDarkMode ? 'bg-slate-950' : 'bg-[#F0F4F8]'} ${isListening ? 'shadow-[inset_0_0_100px_rgba(239,68,68,0.15)]' : ''}`}>
+      {isListening && (
+        <div className="fixed inset-0 pointer-events-none z-[60] border-[12px] border-red-500/10 animate-pulse"></div>
+      )}
       {alertMessage && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 animate-fade-in">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-fade-in-up text-center">

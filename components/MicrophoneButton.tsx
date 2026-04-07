@@ -29,6 +29,15 @@ const MicrophoneButton: React.FC<MicrophoneButtonProps> = ({ isListening, onStar
           <>
             <span className="absolute inset-0 rounded-full bg-red-400 animate-ping opacity-20 scale-150"></span>
             <span className="absolute inset-0 rounded-full bg-red-500 animate-pulse opacity-30 scale-125"></span>
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              {[...Array(3)].map((_, i) => (
+                <span 
+                  key={i} 
+                  className="absolute w-full h-full rounded-full border-2 border-red-500/50 animate-[ping_2s_linear_infinite]"
+                  style={{ animationDelay: `${i * 0.6}s` }}
+                ></span>
+              ))}
+            </div>
           </>
         )}
         <button
